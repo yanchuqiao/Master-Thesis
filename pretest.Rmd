@@ -1,0 +1,195 @@
+---
+title: "pre-test"
+output: pdf_document
+date: "2023-02-20"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#Read data
+pretest <- read.csv("/Users/yanchu/Desktop/Thesis/pre-test data.csv")
+pretest <- pretest[-c(1:9), ]
+```
+
+```{r}
+library("tidyverse")
+pretest <- pretest %>%relocate(ID)
+
+#Data exploration, demographics, count the frequency in general
+count(pretest, Age)
+count(pretest, Gender)
+count(pretest, Education.Level)
+count(pretest, Twitter.Frequence)
+count(pretest, Twitter.Frequence)
+
+#Check participants' Twitter usage
+pretest$Following.Number <- as.numeric(pretest$Following.Number)
+summary(pretest$Following.Number)
+
+pretest$Follower.Number <- as.numeric(pretest$Follower.Number)
+summary(pretest$Follower.Number)
+
+
+```
+
+```{r}
+library(dplyr)
+library(dbplyr)
+
+#Recode the difference measurement
+pretest.recoded <- pretest %>% mutate_at(c("Pre.Tweet.1","pre.Tweet.2","Pre.Tweet.3","Dr.Female","Dr.Male","MD.Female","MD.Male","Non.Female","Non.Male","Dr.link","Dr.nolink","MD.link","MD.nolink","NoDr.link","NoDr.nolink","Irrelevant.profile", "relevant.profile"), ~as.numeric(recode(.,"strongly disagree"=-3, "disagree"=-2, "somewhat disagree"=-1, "neutral" = 0, "somewhat agree"=1, "agree"=2, "strongly agree"=3)))
+
+```
+
+```{r}
+#Assign Lables for Hypothesis 1 & 2
+pretest_sub1 <- pretest.recoded[,c("ID","Pre.Tweet.1",  "Dr.Female", "Dr.Male", "MD.Female", "MD.Male","Non.Female", "Non.Male", "Twitter.usage", "Twitter.Frequence")]
+
+
+#Assign Gender Label
+pretest_sub1 <- mutate(pretest_sub1,
+        GenderLabel = case_when(
+                is.na(Dr.Male) & is.na(MD.Female) & is.na(MD.Male) & is.na(Non.Female) & is.na(Non.Male)~ 'Female',
+                is.na(Dr.Female) & is.na(Dr.Male) & is.na(MD.Male) & is.na(Non.Female) & is.na(Non.Male)~'Female',
+                is.na(Dr.Female) & is.na(Dr.Male) & is.na(MD.Male) & is.na(MD.Female) & is.na(Non.Male)~'Female',
+                is.na(Dr.Female) & is.na(MD.Female) & is.na(MD.Male) & is.na(Non.Male) & is.na(Non.Female)~'Male',
+                is.na(Dr.Female) & is.na(Dr.Male) & is.na(MD.Female) & is.na(Non.Male) & is.na(Non.Female)~'Male',
+                is.na(Dr.Female) & is.na(Dr.Male) & is.na(MD.Female) & is.na(MD.Male) & is.na(Non.Female)~'Male'
+             )) 
+
+#Assign Title Label
+pretest_sub1 <- mutate(pretest_sub1,
+        TitleLabel = case_when(
+                is.na(Dr.Male) & is.na(MD.Female) & is.na(MD.Male) & is.na(Non.Female) & is.na(Non.Male)~ 'Doctor',
+                is.na(Dr.Female) & is.na(Dr.Male) & is.na(MD.Male) & is.na(Non.Female) & is.na(Non.Male)~'MD',
+                is.na(Dr.Female) & is.na(Dr.Male) & is.na(MD.Male) & is.na(MD.Female) & is.na(Non.Male)~'Non title',
+                is.na(Dr.Female) & is.na(MD.Female) & is.na(MD.Male) & is.na(Non.Male) & is.na(Non.Female)~'Doctor',
+                is.na(Dr.Female) & is.na(Dr.Male) & is.na(MD.Female) & is.na(Non.Male) & is.na(Non.Female)~'MD',
+                is.na(Dr.Female) & is.na(Dr.Male) & is.na(MD.Female) & is.na(MD.Male) & is.na(Non.Female)~'Non title'
+             )) 
+
+#Calculate Difference
+pretest_sub1 <- mutate(pretest_sub1,
+        Difference = case_when(
+                is.na(Dr.Male) & is.na(MD.Female) & is.na(MD.Male) & is.na(Non.Female) & is.na(Non.Male)~ abs(Pre.Tweet.1-Dr.Female),
+                is.na(Dr.Female) & is.na(Dr.Male) & is.na(MD.Male) & is.na(Non.Female) & is.na(Non.Male)~abs(Pre.Tweet.1-MD.Female),
+                is.na(Dr.Female) & is.na(Dr.Male) & is.na(MD.Male) & is.na(MD.Female) & is.na(Non.Male)~abs(Pre.Tweet.1-Non.Female),
+                is.na(Dr.Female) & is.na(MD.Female) & is.na(MD.Male) & is.na(Non.Male) & is.na(Non.Female)~abs(Pre.Tweet.1-Dr.Male),
+                is.na(Dr.Female) & is.na(Dr.Male) & is.na(MD.Female) & is.na(Non.Male) & is.na(Non.Female)~abs(Pre.Tweet.1-MD.Male),
+                is.na(Dr.Female) & is.na(Dr.Male) & is.na(MD.Female) & is.na(MD.Male) & is.na(Non.Female)~abs(Pre.Tweet.1-Non.Male)
+             )) 
+
+#The difference and SD of Statement 1
+summary(pretest_sub1$Difference)
+sd(pretest_sub1$Difference)
+
+```
+
+```{r}
+#Test for hypothesis 2 Gender
+pretest_gender <- pretest_sub1[,c("ID","GenderLabel", "Difference")]
+
+gender.anova <- aov(Difference ~ GenderLabel, data = pretest_gender )
+
+summary(gender.anova)
+```
+```{r}
+#test for hypothesis 1 Title
+pretest_title <- pretest_sub1[,c("ID","TitleLabel", "Difference")]
+
+title.anova <- aov(Difference ~ TitleLabel, data = pretest_title )
+
+summary(title.anova)
+
+title.lm <- lm(Difference ~ TitleLabel, data = pretest_title)
+
+summary(title.lm)
+```
+```{r}
+#H3 & H4
+pretest_usage <- pretest_sub1[,c("ID","Twitter.usage", "Twitter.Frequence","Difference")]
+#usage anova
+usage.anova <- aov(Difference ~ Twitter.usage, data = pretest_usage)
+summary(usage.anova)
+
+#Frequence anova
+frequence.anova <- aov(Difference ~ Twitter.Frequence, data = pretest_usage)
+summary(frequence.anova)
+```
+
+```{r}
+#Assign Lables for Hypothesis 5
+pretest_sub2 <- pretest.recoded[,c("ID","pre.Tweet.2",  "Dr.link", "Dr.nolink", "MD.link", "MD.nolink","NoDr.link", "NoDr.nolink")]
+
+
+#Assign link Label
+pretest_sub2 <- mutate(pretest_sub2,
+        LinkLabel = case_when(
+                is.na(Dr.link) & is.na(MD.link) & is.na(MD.nolink) & is.na(NoDr.link) & is.na(NoDr.nolink)~ 'No link',
+                is.na(Dr.link) & is.na(Dr.nolink) & is.na(MD.link) & is.na(NoDr.link) & is.na(NoDr.nolink)~'No link',
+                is.na(Dr.link) & is.na(Dr.nolink) & is.na(MD.link) & is.na(MD.nolink) & is.na(NoDr.link)~'No link',
+                is.na(Dr.nolink) & is.na(MD.link) & is.na(MD.nolink) & is.na(NoDr.link) & is.na(NoDr.nolink)~'link',
+                is.na(Dr.link) & is.na(Dr.nolink) & is.na(MD.nolink) & is.na(NoDr.link) & is.na(NoDr.nolink)~'link',
+                is.na(Dr.link) & is.na(Dr.nolink) & is.na(MD.link) & is.na(MD.nolink) & is.na(NoDr.nolink)~'link'
+             )) 
+
+#Assign Title Label
+pretest_sub2 <- mutate(pretest_sub2,
+        TitleLabel = case_when(
+                is.na(Dr.link) & is.na(MD.link) & is.na(MD.nolink) & is.na(NoDr.link) & is.na(NoDr.nolink)~ 'Doctor',
+                is.na(Dr.link) & is.na(Dr.nolink) & is.na(MD.link) & is.na(NoDr.link) & is.na(NoDr.nolink)~'No MD',
+                is.na(Dr.link) & is.na(Dr.nolink) & is.na(MD.link) & is.na(MD.nolink) & is.na(NoDr.link)~'Non title',
+                is.na(Dr.nolink) & is.na(MD.link) & is.na(MD.nolink) & is.na(NoDr.link) & is.na(NoDr.nolink)~'Doctor',
+                is.na(Dr.link) & is.na(Dr.nolink) & is.na(MD.nolink) & is.na(NoDr.link) & is.na(NoDr.nolink)~'MD',
+                is.na(Dr.link) & is.na(Dr.nolink) & is.na(MD.link) & is.na(MD.nolink) & is.na(NoDr.nolink)~'Non title'
+             ))  
+
+#Calculate Difference
+pretest_sub2 <- mutate(pretest_sub2,
+        Difference = case_when(
+                is.na(Dr.link) & is.na(MD.link) & is.na(MD.nolink) & is.na(NoDr.link) & is.na(NoDr.nolink)~ abs(pre.Tweet.2 - Dr.nolink),
+                is.na(Dr.link) & is.na(Dr.nolink) & is.na(MD.link) & is.na(NoDr.link) & is.na(NoDr.nolink)~abs(pre.Tweet.2 - MD.nolink),
+                is.na(Dr.link) & is.na(Dr.nolink) & is.na(MD.link) & is.na(MD.nolink) & is.na(NoDr.link)~abs(pre.Tweet.2 - NoDr.nolink),
+                is.na(Dr.nolink) & is.na(MD.link) & is.na(MD.nolink) & is.na(NoDr.link) & is.na(NoDr.nolink)~abs(pre.Tweet.2 - Dr.link),
+                is.na(Dr.link) & is.na(Dr.nolink) & is.na(MD.nolink) & is.na(NoDr.link) & is.na(NoDr.nolink)~abs(pre.Tweet.2 - MD.link),
+                is.na(Dr.link) & is.na(Dr.nolink) & is.na(MD.link) & is.na(MD.nolink) & is.na(NoDr.nolink)~abs(pre.Tweet.2 - NoDr.link)))  
+
+#Difference and SD of Statement 2 difference
+summary(pretest_sub2$Difference)
+sd(pretest_sub2$Difference)
+
+pretest_link <- pretest_sub2[,c("ID","LinkLabel", "TitleLabel","Difference")]
+#link anova
+link.anova <- aov(Difference ~ LinkLabel, data = pretest_link)
+summary(link.anova)
+```
+
+```{r}
+#Assign Lables for Hypothesis 6
+pretest_sub3 <- pretest.recoded[,c("ID","Pre.Tweet.3",  "Irrelevant.profile", "relevant.profile")]
+
+
+#Assign link Label
+pretest_sub3 <- mutate(pretest_sub3,
+        bioLabel = case_when(
+                is.na(Irrelevant.profile) ~ 'relevant',
+                is.na(relevant.profile) ~'irrelevant'))
+
+
+#Calculate Difference
+pretest_sub3 <- mutate(pretest_sub3,
+        Difference = case_when(
+                is.na(Irrelevant.profile) ~ abs(Pre.Tweet.3 - relevant.profile),
+                is.na(relevant.profile)~ abs(Pre.Tweet.3 - Irrelevant.profile) ))  
+#Mean and sd of statement 3
+summary(pretest_sub3$Difference)
+sd(pretest_sub3$Difference)
+
+pretest_bio <- pretest_sub3[,c("ID","bioLabel","Difference")]
+
+#bio anova
+bio.anova <- aov(Difference ~ bioLabel, data = pretest_bio)
+summary(bio.anova)
+
+```
