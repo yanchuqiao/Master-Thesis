@@ -1,0 +1,26 @@
+---
+title: "power analysis"
+output: pdf_document
+date: "2023-04-18"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Futher Design
+## Option 1: keep the old design, do power analysis and estimate sample size
+```{r}
+#First, for the h1 and h2. Title are in three levels: MD, Dr, non. Gender has two level: Female and male. Six conditions in total. 15 group comparisons in total. Based on previous found, 0.6111 was the mean of Difference, and 1.1306 was the sd of difference. 
+library(daewr)
+
+round(Fpower1(alpha = 0.05, nlev = 6, nreps = 110:120, Delta = 0.6111, sigma = 1.130526), 3)
+# result: at least 114 people per group to obtain at least 0.90 with family-wise significant level of 0.05. 
+114*6 # at least 684 in total 
+
+#Statement 2
+round(Fpower1(alpha = 0.05, nlev = 6, nreps = 1350:1360, Delta = 0.17, sigma = 1.09), 3)
+
+#Statement 3
+round(Fpower1(alpha = 0.05, nlev = 6, nreps = 40:50, Delta = 0.87, sigma = 0.97), 3)
+```

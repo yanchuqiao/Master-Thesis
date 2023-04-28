@@ -1,0 +1,610 @@
+---
+title: "data analysis"
+output: pdf_document
+date: "2023-03-09"
+---
+
+```{r setup, include=FALSE}
+#read data
+data <- read.csv("/Users/yanchu/Desktop/Thesis/data.csv")
+data <- data[-c(1:26), ]
+
+#Filter out attention check question 
+clean_data <- subset(data, Attention.Check == 'somewhat disagree') 
+
+#filter out timeout users
+clean_data <- subset(clean_data, !(ID %in% c('6159f254f81c163cda4c76a4' , '6169c01bb2f3c18f07d99b83', '604268991d1ba711e6d37831')))
+
+#filter out duplicated users- there is 1 user who submitted twice, the second submission was removed
+newdata<- clean_data[!duplicated(clean_data$ID), ]
+
+```
+
+```{r}
+library("tidyverse")
+newdata <- newdata %>%relocate(ID)
+
+
+#Data exploration, demographics, count the frequency in general
+count(newdata, Age)
+count(newdata, Gender)
+count(newdata, Education.Level)
+count(newdata, Twitter.usage)
+count(newdata, Twitter.Frequence)
+
+#Check participants' Twitter usage
+newdata$Following.Number <- as.numeric(newdata$Following.Number)
+newdata$Following.Number[is.na(newdata$Following.Number)] <- 800
+summary(newdata$Following.Number)
+
+newdata$Follower.Number <- as.numeric(newdata$Follower.Number)
+summary(newdata$Follower.Number)
+```
+
+```{r}
+library(ggplot2)
+library(forcats)
+
+#Gender Pie Chart
+Gender <- newdata %>%
+  group_by(Gender) %>%
+  summarise(counts = n())
+
+ggplot(Gender, aes(x="", y=counts, fill=Gender)) +
+  geom_bar(stat="identity", width=1) +
+  coord_polar("y", start=0) +
+  geom_text(aes(label = paste0(round(counts/180,2)*100, "%")), position = position_stack(vjust=0.5)) +
+  labs(x = NULL, y = NULL) +
+  theme_classic() +
+  theme(axis.line = element_blank(),
+          axis.text = element_blank(),
+          axis.ticks = element_blank()) +
+  scale_fill_brewer(palette="Blues") +
+  labs(title="Gender Percentage Plot")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+#Age Pie Chart
+Age <- newdata %>%
+  group_by(Age) %>%
+  summarise(counts = n())
+
+ggplot(Age, aes(x="", y=counts, fill=Age)) +
+  geom_bar(stat="identity", width=1) +
+  coord_polar("y", start=0) +
+  geom_text(aes(label = paste0(round(counts/180,2)*100, "%"), x = 1.5), position = position_stack(vjust=0.5)) +
+  labs(x = NULL, y = NULL) +
+  theme_classic() +
+  theme(axis.line = element_blank(),
+          axis.text = element_blank(),
+          axis.ticks = element_blank()) +
+  scale_fill_brewer(palette="OrRd") +
+  labs(title="Age Percentage Plot")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+#Education level plot
+Education_level <- newdata %>%
+  group_by(Education.Level) %>%
+  summarise(counts = n())
+
+
+ggplot(Education_level, aes(x = fct_rev(fct_reorder(Education.Level,
+                     counts)), y = counts)) +
+  geom_bar(stat = "identity", fill="lightblue", width=0.3) +
+  geom_text(aes(label = counts), vjust = -0.3) + theme_minimal() +
+  theme(axis.line = element_line(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        panel.background = element_blank()) +
+  labs(title="Education Level Counts Plot",
+        x ="Education Level", y = "Count")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+#Twitter usage plot
+Twitter_usage <- newdata %>%
+  group_by(Twitter.usage) %>%
+  summarise(counts = n())
+
+ggplot(Twitter_usage, aes(x = fct_rev(fct_reorder(Twitter.usage,
+                     counts)), y = counts)) +
+  geom_bar(stat = "identity", fill="lightpink", width=0.3) +
+  geom_text(aes(label = counts), vjust = -0.3) + theme_minimal() +
+  theme(axis.line = element_line(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        panel.background = element_blank()) +
+  labs(title="Twitter Usage Counts Plot",
+        x ="Twitter Usage", y = "Count")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+#Twitter Frequency plot
+Twitter_frequency <- newdata %>%
+  group_by(Twitter.Frequence) %>%
+  summarise(counts = n())
+
+ggplot(Twitter_frequency, aes(x = fct_rev(fct_reorder(Twitter.Frequence,
+                     counts)), y = counts)) +
+  geom_bar(stat = "identity", fill="#009E73", width=0.3) +
+  geom_text(aes(label = counts), vjust = -0.3) + theme_minimal() +
+  theme(axis.line = element_line(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        panel.background = element_blank()) +
+  labs(title="Twitter Posting Frequence Counts Plot",
+        x ="Twitter Posting Frequence", y = "Count")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+```{r}
+library(dplyr)
+library(dbplyr)
+
+#recoded measurement 
+newdata <- newdata %>% mutate_at(c("Pre.Tweet.1","pre.Tweet.2","Pre.Tweet.3","Dr.Female","Dr.Male","MD.Female","MD.Male","Non.Female","Non.Male","Dr.link","Dr.nolink","MD.link","MD.nolink","NoDr.link","NoDr.nolink","Irrelevant.profile", "relevant.profile"), ~as.numeric(recode(.,"strongly disagree"=-3, "disagree"=-2, "somewhat disagree"=-1, "neutral" = 0, "somewhat agree"=1, "agree"=2, "strongly agree"=3)))
+
+```
+# H1
+```{r}
+#Assign Lables for Hypothesis
+newdata_sub1 <- newdata[,c("ID","Pre.Tweet.1",  "Dr.Female", "Dr.Male", "MD.Female", "MD.Male","Non.Female", "Non.Male", "Twitter.usage", "Twitter.Frequence", "Education.Level", "Age", "Gender")]
+
+
+#Assign Gender Label
+newdata_sub1 <- mutate(newdata_sub1,
+        GenderLabel = case_when(
+                is.na(Dr.Male) & is.na(MD.Female) & is.na(MD.Male) & is.na(Non.Female) & is.na(Non.Male)~ 'Female',
+                is.na(Dr.Female) & is.na(Dr.Male) & is.na(MD.Male) & is.na(Non.Female) & is.na(Non.Male)~'Female',
+                is.na(Dr.Female) & is.na(Dr.Male) & is.na(MD.Male) & is.na(MD.Female) & is.na(Non.Male)~'Female',
+                is.na(Dr.Female) & is.na(MD.Female) & is.na(MD.Male) & is.na(Non.Male) & is.na(Non.Female)~'Male',
+                is.na(Dr.Female) & is.na(Dr.Male) & is.na(MD.Female) & is.na(Non.Male) & is.na(Non.Female)~'Male',
+                is.na(Dr.Female) & is.na(Dr.Male) & is.na(MD.Female) & is.na(MD.Male) & is.na(Non.Female)~'Male'
+             )) 
+
+#Assign Title Label
+newdata_sub1 <- mutate(newdata_sub1,
+        TitleLabel = case_when(
+                is.na(Dr.Male) & is.na(MD.Female) & is.na(MD.Male) & is.na(Non.Female) & is.na(Non.Male)~ 'Doctor',
+                is.na(Dr.Female) & is.na(Dr.Male) & is.na(MD.Male) & is.na(Non.Female) & is.na(Non.Male)~'MD',
+                is.na(Dr.Female) & is.na(Dr.Male) & is.na(MD.Male) & is.na(MD.Female) & is.na(Non.Male)~'Non title',
+                is.na(Dr.Female) & is.na(MD.Female) & is.na(MD.Male) & is.na(Non.Male) & is.na(Non.Female)~'Doctor',
+                is.na(Dr.Female) & is.na(Dr.Male) & is.na(MD.Female) & is.na(Non.Male) & is.na(Non.Female)~'MD',
+                is.na(Dr.Female) & is.na(Dr.Male) & is.na(MD.Female) & is.na(MD.Male) & is.na(Non.Female)~'Non title'
+             )) 
+
+#Calculate Difference
+newdata_sub1 <- mutate(newdata_sub1,
+        Difference = case_when(
+                is.na(Dr.Male) & is.na(MD.Female) & is.na(MD.Male) & is.na(Non.Female) & is.na(Non.Male)~ abs(Pre.Tweet.1-Dr.Female),
+                is.na(Dr.Female) & is.na(Dr.Male) & is.na(MD.Male) & is.na(Non.Female) & is.na(Non.Male)~abs(Pre.Tweet.1-MD.Female),
+                is.na(Dr.Female) & is.na(Dr.Male) & is.na(MD.Male) & is.na(MD.Female) & is.na(Non.Male)~abs(Pre.Tweet.1-Non.Female),
+                is.na(Dr.Female) & is.na(MD.Female) & is.na(MD.Male) & is.na(Non.Male) & is.na(Non.Female)~abs(Pre.Tweet.1-Dr.Male),
+                is.na(Dr.Female) & is.na(Dr.Male) & is.na(MD.Female) & is.na(Non.Male) & is.na(Non.Female)~abs(Pre.Tweet.1-MD.Male),
+                is.na(Dr.Female) & is.na(Dr.Male) & is.na(MD.Female) & is.na(MD.Male) & is.na(Non.Female)~abs(Pre.Tweet.1-Non.Male)
+             )) 
+
+#Calculate no abs difference
+newdata_sub1 <- mutate(newdata_sub1,
+        noabsDifference = case_when(
+                is.na(Dr.Male) & is.na(MD.Female) & is.na(MD.Male) & is.na(Non.Female) & is.na(Non.Male)~ Dr.Female - Pre.Tweet.1,
+                is.na(Dr.Female) & is.na(Dr.Male) & is.na(MD.Male) & is.na(Non.Female) & is.na(Non.Male)~MD.Female - Pre.Tweet.1,
+                is.na(Dr.Female) & is.na(Dr.Male) & is.na(MD.Male) & is.na(MD.Female) & is.na(Non.Male)~Non.Female - Pre.Tweet.1,
+                is.na(Dr.Female) & is.na(MD.Female) & is.na(MD.Male) & is.na(Non.Male) & is.na(Non.Female)~Dr.Male - Pre.Tweet.1,
+                is.na(Dr.Female) & is.na(Dr.Male) & is.na(MD.Female) & is.na(Non.Male) & is.na(Non.Female)~MD.Male - Pre.Tweet.1,
+                is.na(Dr.Female) & is.na(Dr.Male) & is.na(MD.Female) & is.na(MD.Male) & is.na(Non.Female)~Non.Male - Pre.Tweet.1
+             )) 
+#not all change are positive
+plot(newdata_sub1$noabsDifference)
+
+#explore the data where is negative change
+negative_change <- subset(newdata_sub1, noabsDifference < 0) 
+
+#mean and sd of the difference 
+summary(newdata_sub1$noabsDifference)
+sd(newdata_sub1$noabsDifference)
+
+#plot the difference1 
+Difference1 <- newdata_sub1 %>%
+  group_by(noabsDifference) %>%
+  summarise(counts = n())
+
+ggplot(Difference1, aes(x = factor(noabsDifference), y = counts)) +
+  geom_bar(stat = "identity", fill="#663399", width=0.3) +
+  geom_text(aes(label = counts), vjust = -0.3) + theme_minimal() +
+  theme(axis.line = element_line(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        panel.background = element_blank()) +
+  labs(title="Statement 1 Difference Counts Plot",
+        x ="Difference of Credibility Change Level", y = "Count of participants")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+```{r}
+#Hypothesis 1 Title
+newdata_title <- newdata_sub1[,c("ID","TitleLabel", "GenderLabel","Difference")]
+
+title.anova <- aov(Difference ~ TitleLabel, data = newdata_title )
+summary(title.anova)
+
+#check anova assumption
+par(mfrow=c(2,2))
+plot(title.anova)
+par(mfrow=c(1,1))
+
+#To find how much is the difference between all levels by TukeyHSD
+
+tukey.title.anova<-TukeyHSD(title.anova)
+tukey.title.anova
+tukey.plot.test<-TukeyHSD(title.anova,  conf.level=0.95)
+plot(tukey.plot.test, las=2.5 , col="brown", cex.axis=0.5, col.axis=1.0, )
+
+```
+
+```{r}
+
+#Hypothesis 2 Gender
+gender.anova <- aov(Difference ~ GenderLabel, data = newdata_title)
+summary(gender.anova)
+
+gender.t <- t.test(Difference ~ GenderLabel, data = newdata_title)
+gender.t
+
+title_gender <- aov(Difference ~ TitleLabel + GenderLabel, data = newdata_title)
+summary(title_gender)
+
+interaction1<- aov(Difference ~ TitleLabel * GenderLabel, data = newdata_title)
+summary(interaction1)
+
+
+#choose the best model
+library(AICcmodavg)
+library(VGAM)
+
+model.set <- list(gender.anova, title_gender, interaction1)
+model.names <- c("gender.anova", "title_gender", "interaction1")
+
+aictab(model.set, modnames = model.names) #One way is the best
+
+```
+# H3 & H4
+
+```{r}
+newdata_usage <- newdata_sub1[,c("ID","Twitter.usage", "Twitter.Frequence","TitleLabel", "GenderLabel", "Difference")]
+
+#usage anova
+usage.anova <- aov(Difference ~ Twitter.usage, data = newdata_usage)
+summary(usage.anova)
+
+usage_title.anova <- aov(Difference ~ Twitter.usage + TitleLabel, data = newdata_usage)
+summary(usage_title.anova)
+
+interaction2 <- aov(Difference ~ Twitter.usage * TitleLabel, data = newdata_usage)
+summary(interaction2)
+
+model.set <- list(usage.anova, usage_title.anova, interaction2 )
+model.names <- c("usage.anova", "usage_title.anova", "interaction2")
+aictab(model.set, modnames = model.names)
+
+#Interaction plot shows there are interaction effect between all 5 types of users. Need further test
+interaction.plot(x.factor     = newdata_usage$TitleLabel,
+                 trace.factor = newdata_usage$Twitter.usage,
+                 response     = newdata_usage$Difference,
+                 fun = mean,
+                 type="b",
+                 col=c("black","red","green"),  ### Colors for levels of trace var.
+                 pch=c(19, 17, 15),             ### Symbols for levels of trace var.
+                 fixed=TRUE,                    ### Order by factor order in data
+                 leg.bty = "o", main = "Interaction effect plot")
+
+library(emmeans)
+library(multcomp)
+library(FSA)
+marginal = emmeans(interaction2, ~ Twitter.usage : TitleLabel)
+pairs(marginal,adjust="tukey")
+
+cld(marginal,alpha=0.05,Letters=letters,adjust="tukey")       ### Use lower-case letters for .group
+Sum = Summarize(Difference ~ Twitter.usage + TitleLabel,
+                data=newdata_usage,
+                digits=3)
+
+# Add standard error of the mean to the Sum data frame
+Sum$se = Sum$sd / sqrt(Sum$n)
+Sum$se = signif(Sum$se, digits=3)
+Sum$Twitter.usage = factor(Sum$Twitter.usage,
+                     levels=unique(Sum$Twitter.usage))
+
+pd = position_dodge(.2)
+ggplot(Sum, aes(x = Twitter.usage,y = mean,color = TitleLabel)) +
+  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width=.2, size=0.7, position = pd) +
+    geom_point(shape=15, size=2, position = pd) +
+    theme_bw() +
+    theme(axis.title = element_text(face = "bold")) +
+  scale_colour_manual(values= c("black","red","green")) +
+   labs(title="Interaction effect of Twitter usage and users' title", x ="Twitter Usage", y = "Mean Difference change")+
+  theme(plot.title = element_text(hjust = 0.5))
+   
+
+#Frequence anov
+frequence.anova <- aov(Difference ~ Twitter.Frequence, data = newdata_usage)
+summary(frequence.anova)
+
+frequence_title.anova <- aov(Difference ~ Twitter.Frequence + TitleLabel, data = newdata_usage)
+summary(frequence_title.anova)
+
+interaction3 <- aov(Difference ~ Twitter.Frequence * TitleLabel, data = newdata_usage)
+summary(interaction3)
+
+#model comparison
+model.set <- list(frequence.anova, frequence_title.anova,interaction3 )
+model.names <- c("frequence.anova", "frequence_title.anova", "interaction3")
+aictab(model.set, modnames = model.names)
+
+#to investigate what type of users are influences, aka the usage vs difference
+barplot(table(newdata_usage$Twitter.usage, newdata_usage$Difference),
+        beside = T,
+        legend.text = T,
+        #ylab = "Difference",
+        main = "",  col=c("#9bf6ff","#fdffb6","#bdb2ff","#ffc6ff","#b5e48c", "#9a8c98"))
+
+```
+
+# H5
+```{r}
+#Assign Lables for Hypothesis 5
+newdata_sub2 <- newdata[,c("ID","pre.Tweet.2",  "Dr.link", "Dr.nolink", "MD.link", "MD.nolink","NoDr.link", "NoDr.nolink", "Twitter.usage", "Twitter.Frequence", "Education.Level", "Age", "Gender")]
+
+
+#Assign link Label
+newdata_sub2 <- mutate(newdata_sub2,
+        LinkLabel = case_when(
+                is.na(Dr.link) & is.na(MD.link) & is.na(MD.nolink) & is.na(NoDr.link) & is.na(NoDr.nolink)~ 'No link',
+                is.na(Dr.link) & is.na(Dr.nolink) & is.na(MD.link) & is.na(NoDr.link) & is.na(NoDr.nolink)~'No link',
+                is.na(Dr.link) & is.na(Dr.nolink) & is.na(MD.link) & is.na(MD.nolink) & is.na(NoDr.link)~'No link',
+                is.na(Dr.nolink) & is.na(MD.link) & is.na(MD.nolink) & is.na(NoDr.link) & is.na(NoDr.nolink)~'link',
+                is.na(Dr.link) & is.na(Dr.nolink) & is.na(MD.nolink) & is.na(NoDr.link) & is.na(NoDr.nolink)~'link',
+                is.na(Dr.link) & is.na(Dr.nolink) & is.na(MD.link) & is.na(MD.nolink) & is.na(NoDr.nolink)~'link'
+             )) 
+
+#Assign Title Label
+newdata_sub2 <- mutate(newdata_sub2,
+        TitleLabel = case_when(
+                is.na(Dr.link) & is.na(MD.link) & is.na(MD.nolink) & is.na(NoDr.link) & is.na(NoDr.nolink)~ 'Doctor',
+                is.na(Dr.link) & is.na(Dr.nolink) & is.na(MD.link) & is.na(NoDr.link) & is.na(NoDr.nolink)~'MD',
+                is.na(Dr.link) & is.na(Dr.nolink) & is.na(MD.link) & is.na(MD.nolink) & is.na(NoDr.link)~'Non title',
+                is.na(Dr.nolink) & is.na(MD.link) & is.na(MD.nolink) & is.na(NoDr.link) & is.na(NoDr.nolink)~'Doctor',
+                is.na(Dr.link) & is.na(Dr.nolink) & is.na(MD.nolink) & is.na(NoDr.link) & is.na(NoDr.nolink)~'MD',
+                is.na(Dr.link) & is.na(Dr.nolink) & is.na(MD.link) & is.na(MD.nolink) & is.na(NoDr.nolink)~'Non title'
+             ))  
+
+#Calculate Difference
+newdata_sub2 <- mutate(newdata_sub2,
+        Difference = case_when(
+                is.na(Dr.link) & is.na(MD.link) & is.na(MD.nolink) & is.na(NoDr.link) & is.na(NoDr.nolink)~ abs(pre.Tweet.2 - Dr.nolink),
+                is.na(Dr.link) & is.na(Dr.nolink) & is.na(MD.link) & is.na(NoDr.link) & is.na(NoDr.nolink)~abs(pre.Tweet.2 - MD.nolink),
+                is.na(Dr.link) & is.na(Dr.nolink) & is.na(MD.link) & is.na(MD.nolink) & is.na(NoDr.link)~abs(pre.Tweet.2 - NoDr.nolink),
+                is.na(Dr.nolink) & is.na(MD.link) & is.na(MD.nolink) & is.na(NoDr.link) & is.na(NoDr.nolink)~abs(pre.Tweet.2 - Dr.link),
+                is.na(Dr.link) & is.na(Dr.nolink) & is.na(MD.nolink) & is.na(NoDr.link) & is.na(NoDr.nolink)~abs(pre.Tweet.2 - MD.link),
+                is.na(Dr.link) & is.na(Dr.nolink) & is.na(MD.link) & is.na(MD.nolink) & is.na(NoDr.nolink)~abs(pre.Tweet.2 - NoDr.link)))  
+
+summary(newdata_sub2$Difference)
+sd(newdata_sub2$Difference)
+
+#calculate the difference no absolute
+newdata_sub2 <- mutate(newdata_sub2,
+        noabsDifference = case_when(
+                is.na(Dr.link) & is.na(MD.link) & is.na(MD.nolink) & is.na(NoDr.link) & is.na(NoDr.nolink)~ Dr.nolink - pre.Tweet.2 ,
+                is.na(Dr.link) & is.na(Dr.nolink) & is.na(MD.link) & is.na(NoDr.link) & is.na(NoDr.nolink)~ MD.nolink -pre.Tweet.2 ,
+                is.na(Dr.link) & is.na(Dr.nolink) & is.na(MD.link) & is.na(MD.nolink) & is.na(NoDr.link)~NoDr.nolink - pre.Tweet.2 ,
+                is.na(Dr.nolink) & is.na(MD.link) & is.na(MD.nolink) & is.na(NoDr.link) & is.na(NoDr.nolink)~Dr.link - pre.Tweet.2,
+                is.na(Dr.link) & is.na(Dr.nolink) & is.na(MD.nolink) & is.na(NoDr.link) & is.na(NoDr.nolink)~MD.link - pre.Tweet.2,
+                is.na(Dr.link) & is.na(Dr.nolink) & is.na(MD.link) & is.na(MD.nolink) & is.na(NoDr.nolink)~NoDr.link - pre.Tweet.2))  
+
+#not all difference are positive
+plot(newdata_sub2$noabsDifference)
+
+summary(newdata_sub2$noabsDifference)
+sd(newdata_sub2$noabsDifference)
+
+#explore the data where is negative change
+negative_change2 <- subset(newdata_sub2, noabsDifference < 0) 
+
+#plot the difference2 
+Difference2 <- newdata_sub2 %>%
+  group_by(noabsDifference) %>%
+  summarise(counts = n())
+
+ggplot(Difference2, aes(x = factor(noabsDifference), y = counts)) +
+  geom_bar(stat = "identity", fill="#6666CC", width=0.3) +
+  geom_text(aes(label = counts), vjust = -0.3) + theme_minimal() +
+  theme(axis.line = element_line(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        panel.background = element_blank()) +
+  labs(title="Statement 2 Difference Counts Plot",
+        x ="Difference of Credibility Change Level", y = "Count of Participants")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+newdata_link <- newdata_sub2[,c("ID","LinkLabel", "TitleLabel","Difference")]
+
+#link t test
+link.t <- t.test(Difference ~ LinkLabel, data = newdata_link)
+link.t
+
+barplot(table(newdata_link$LinkLabel, newdata_link$Difference),
+        beside = T,
+        legend.text = T,
+        #ylab = "Difference",
+        main = "Plot of link and difference",  col=c("#bdb2ff","#ffc6ff"))
+
+
+```
+
+# H6
+```{r}
+#Assign Lables for Hypothesis 6
+newdata_sub3 <- newdata[,c("ID","Pre.Tweet.3",  "Irrelevant.profile", "relevant.profile", "Twitter.usage", "Twitter.Frequence", "Education.Level", "Age", "Gender")]
+
+#Assign link Label
+newdata_sub3 <- mutate(newdata_sub3,
+        bioLabel = case_when(
+                is.na(Irrelevant.profile) ~ 'relevant',
+                is.na(relevant.profile) ~'irrelevant'))
+
+#Calculate Difference
+newdata_sub3 <- mutate(newdata_sub3,
+        Difference = case_when(
+                is.na(Irrelevant.profile) ~ abs(Pre.Tweet.3 - relevant.profile),
+                is.na(relevant.profile)~ abs(Pre.Tweet.3 - Irrelevant.profile) ))  
+
+newdata_sub3 <- mutate(newdata_sub3,
+        noabsDifference = case_when(
+                is.na(Irrelevant.profile) ~ relevant.profile - Pre.Tweet.3 ,
+                is.na(relevant.profile)~ Irrelevant.profile - Pre.Tweet.3 ))  
+
+#not all difference are positive
+plot(newdata_sub3$noabsDifference)
+
+#explore the data where is negative change
+negative_change3 <- subset(newdata_sub3, noabsDifference < 0) 
+
+summary(newdata_sub3$noabsDifference)
+sd(newdata_sub3$noabsDifference)
+
+#plot the difference3 
+Difference3 <- newdata_sub3 %>%
+  group_by(noabsDifference) %>%
+  summarise(counts = n())
+
+ggplot(Difference3, aes(x = factor(noabsDifference), y = counts)) +
+  geom_bar(stat = "identity", fill="#CCCFF0", width=0.3) +
+  geom_text(aes(label = counts), vjust = -0.3) + theme_minimal() +
+  theme(axis.line = element_line(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        panel.background = element_blank()) +
+  labs(title="Statement 3 Difference Counts Plot",
+        x ="Difference of Credibility Change Level", y = "Count of participants")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+newdata_bio <- newdata_sub3[,c("ID","bioLabel","Difference")]
+
+#bio t test
+bio.t <- t.test(Difference ~ bioLabel, data = newdata_bio)
+bio.t
+
+barplot(table(newdata_bio$bioLabel, newdata_bio$Difference),
+        beside = T,
+        legend.text = T,
+        #ylab = "Difference",
+        main = "Plot of bio level and difference",  col=c("#9bf6ff","#fdffb6"))
+
+```
+
+# Further exploration on negative impacted users and their type.
+```{r}
+
+#Investigate more into negative changes
+negative1 <- negative_change[ , c("ID", "Twitter.Frequence", "Twitter.usage", "Education.Level", "Age","Gender", "noabsDifference")]
+negative2 <- negative_change2[ , c("ID", "Twitter.Frequence", "Twitter.usage", "Education.Level", "Age","Gender", "noabsDifference")]
+negative3 <- negative_change3[ , c("ID", "Twitter.Frequence", "Twitter.usage", "Education.Level", "Age","Gender", "noabsDifference")]
+
+negative <- rbind(negative1, negative2,negative3 )
+
+#Twitter usage negative plot
+negative_Twitter_usage <- negative %>%
+  group_by(Twitter.usage) %>%
+  summarise(counts = n())
+
+ggplot(negative_Twitter_usage, aes(x = fct_rev(fct_reorder(Twitter.usage,
+                     counts)), y = counts)) +
+  geom_bar(stat = "identity", fill="#FFFFCC", width=0.3) +
+  geom_text(aes(label = counts), vjust = -0.3) + theme_minimal() +
+  theme(axis.line = element_line(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        panel.background = element_blank()) +
+  labs(title="Twitter Usage Counts for negative users Plot",
+        x ="Twitter Usage", y = "Count")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+#negative Twitter frequency negative plot
+negative_Twitter_usage <- negative %>%
+  group_by(Twitter.Frequence) %>%
+  summarise(counts = n())
+
+ggplot(negative_Twitter_usage, aes(x = fct_rev(fct_reorder(Twitter.Frequence,
+                     counts)), y = counts)) +
+  geom_bar(stat = "identity", fill="#009900", width=0.3) +
+  geom_text(aes(label = counts), vjust = -0.3) + theme_minimal() +
+  theme(axis.line = element_line(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        panel.background = element_blank()) +
+  labs(title="Twitter Frequence Counts for negative users Plot",
+        x ="TwitterFrequence", y = "Count")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+#negative user education plot
+negative_Twitter_usage <- negative %>%
+  group_by(Education.Level) %>%
+  summarise(counts = n())
+
+ggplot(negative_Twitter_usage, aes(x = fct_rev(fct_reorder(Education.Level,
+                     counts)), y = counts)) +
+  geom_bar(stat = "identity", fill="#00cc99", width=0.3) +
+  geom_text(aes(label = counts), vjust = -0.3) + theme_minimal() +
+  theme(axis.line = element_line(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        panel.background = element_blank()) +
+  labs(title="Education Level for negative users Plot",
+        x ="Education Level", y = "Count")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+#negative user gender plot
+negative_Twitter_usage <- negative %>%
+  group_by(Gender) %>%
+  summarise(counts = n())
+
+ggplot(negative_Twitter_usage, aes(x = fct_rev(fct_reorder(Gender,
+                     counts)), y = counts)) +
+  geom_bar(stat = "identity", fill="#99FF00", width=0.3) +
+  geom_text(aes(label = counts), vjust = -0.3) + theme_minimal() +
+  theme(axis.line = element_line(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        panel.background = element_blank()) +
+  labs(title="Gender negative users Plot",
+        x ="Gender", y = "Count")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+#negative user Age plot
+negative_Twitter_usage <- negative %>%
+  group_by(Age) %>%
+  summarise(counts = n())
+
+ggplot(negative_Twitter_usage, aes(x = fct_rev(fct_reorder(Age,
+                     counts)), y = counts)) +
+  geom_bar(stat = "identity", fill="#00FFFF", width=0.3) +
+  geom_text(aes(label = counts), vjust = -0.3) + theme_minimal() +
+  theme(axis.line = element_line(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        panel.background = element_blank()) +
+  labs(title="Age negative users Plot",
+        x ="Age", y = "Count")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
